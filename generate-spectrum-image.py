@@ -61,16 +61,6 @@ def write_image(filename, colors, include_text=False):
             ctx.move_to(10, 1785)
             ctx.show_text("Here is ultra-violet. We can't see this either.")
 
-            ctx.move_to(10, 2600)
-            ctx.show_text("It falls off pretty quickly. We aren't even close")
-            ctx.move_to(10, 2600+fs)
-            ctx.show_text("to X-Rays or Gamma waves. Only extremely")
-            ctx.move_to(10, 2600+fs*2)
-            ctx.show_text("powerful cosmic events produce emissions")
-            ctx.move_to(10, 2600+fs*3)
-            ctx.show_text("at these wavelengths.")
-
-
         surface.write_to_png(filename+'.png')
 
 
