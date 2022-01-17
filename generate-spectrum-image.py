@@ -9,6 +9,9 @@ def main():
     write_image('output/sun-spectrum', colors, include_text=False)
     write_image('output/sun-spectrum-annotated', colors, include_text=True)
 
+    visible_colors = list(get_spectrum_colors(only_visible=True))
+    write_image('output/sun-spectrum-visible', visible_colors, include_text=False)
+
 
 def write_image(filename, colors, include_text=False):
     row_count = int(len(colors) / ROW_WIDTH)
@@ -64,7 +67,7 @@ def write_image(filename, colors, include_text=False):
         surface.write_to_png(filename+'.png')
 
 
-def get_spectrum_colors():
+def get_spectrum_colors(only_visible=False):
     # Sourced from https://www.nrel.gov/grid/solar-resource/spectra.html
     with open("AllMODEtr.txt") as f:
         read_tsv = list(csv.reader(f, delimiter="\t"))
@@ -83,6 +86,9 @@ def get_spectrum_colors():
             val = float(row[2])
             a = int((val/top)*255)
             r, g, b = wav2RGB(float(row[1]))
+            if only_visible and (r == g == b == 0):
+                continue
+
             if r == g == b == 0:
                 r = g = b = 255
 
