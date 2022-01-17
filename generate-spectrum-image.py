@@ -1,79 +1,102 @@
 import csv
-from PIL import Image, ImageDraw, ImageFont
+import cairo
 
 ROW_WIDTH = 800
 ROW_HEIGHT = 50
 
 def main():
-	colors = list(get_spectrum_colors())
-	row_count = int(len(colors) / ROW_WIDTH)
-	img = Image.new('RGB', (ROW_WIDTH, row_count*ROW_HEIGHT), color='black')
-	draw = ImageDraw.Draw(img, 'RGBA')
+    colors = list(get_spectrum_colors())
+    write_image('output/sun-spectrum', colors, include_text=False)
+    write_image('output/sun-spectrum-annotated', colors, include_text=True)
 
-	for i, color in enumerate(reversed(colors)):
-		row_num = int(i / ROW_WIDTH)
-		x_offset = i % ROW_WIDTH
-		y_offset = row_num * ROW_HEIGHT
-		draw.line((x_offset, y_offset, x_offset, y_offset+ROW_HEIGHT-2), fill=color)
 
-	img.save("output.png", quality=100, subsampling=0)
+def write_image(filename, colors, include_text=False):
+    row_count = int(len(colors) / ROW_WIDTH)
 
-	fnt = ImageFont.truetype("Roboto-Medium.ttf", 36)
-	fnt_bold = ImageFont.truetype("Roboto-Bold.ttf", 40)
-	draw.multiline_text((10, 10), "The Sun's Fingerprint", font=fnt_bold, fill=(255, 255, 255))
-	draw.multiline_text((10, 100),
-		"This is the spectrum of electromagnetic radiation\n"
-		"that our star, the sun, outputs. The gaps that\n"
-		"you see below are 'absorption lines'. Certain\n"
-		"elements absorb different parts of the spectrum.\n"
-		"This is one way that we know what the sun\n"
-		"is made of.",
-		font=fnt, fill=(255, 255, 255))
+    with cairo.SVGSurface(filename+'.svg', ROW_WIDTH, row_count*ROW_HEIGHT) as surface:
+        ctx = cairo.Context(surface)
+        ctx.save()
+        ctx.set_source_rgba(0, 0, 0, 1)
+        ctx.paint()
+        ctx.restore()
+        ctx.stroke()
+        for i, color in enumerate(reversed(colors)):
+            row_num = int(i / ROW_WIDTH)
+            x_offset = i % ROW_WIDTH
+            y_offset = row_num * ROW_HEIGHT
+            r, g, b, a = color
+            ctx.set_source_rgba(r/255, g/255, b/255, a/255)
+            ctx.move_to(x_offset, y_offset)
+            ctx.line_to(x_offset, y_offset+ROW_HEIGHT-2)
+            ctx.stroke()
 
-	draw.multiline_text((10, 500),
-		"Here is infra-red. Humans eyes can't detect\n"
-		"this frequency but the sun still emits in this\n"
-		"frequency.", font=fnt, fill=(255, 255, 255))
+        if include_text:
+            ctx.set_source_rgba(1, 1, 1, 1)
+            ctx.select_font_face("Roboto", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            ctx.set_font_size(65)
+            ctx.move_to(80, 65)
+            ctx.show_text("The Sun's Fingerprint")
 
-	draw.multiline_text((10, 800), "Visible light starts here.", font=fnt, fill=(255, 255, 255))
+            fs = 36
+            ctx.set_font_size(fs)
+            ctx.move_to(10, 120)
+            ctx.show_text("This is the spectrum of electromagnetic radiation")
+            ctx.move_to(10, 120+fs)
+            ctx.show_text("that our star, the sun, outputs. The gaps that")
+            ctx.move_to(10, 120+fs*2)
+            ctx.show_text("you see below are 'absorption lines'. Certain")
+            ctx.move_to(10, 120+fs*3)
+            ctx.show_text("is made of.")
 
-	draw.multiline_text((10, 1800),
-		"Here is ultra-violet. We don't see this either.\n"
-		, font=fnt, fill=(255, 255, 255))
+            ctx.move_to(10, 530)
+            ctx.show_text("Here is infra-red. Humans eyes can't detect")
+            ctx.move_to(10, 530+fs)
+            ctx.show_text("this frequency but the sun still emits in this")
+            ctx.move_to(10, 530+fs*2)
+            ctx.show_text("frequency.")
 
-	draw.multiline_text((10, 2600),
-		"It falls off pretty quickly. We aren't even close\n"
-		"to X-Rays or Gamma waves. Only extremely\n"
-		"powerful cosmic events produce emissions\n"
-		"at these wavelengths."
-		, font=fnt, fill=(255, 255, 255))
+            ctx.move_to(10, 836)
+            ctx.show_text("Visible light starts here.")
 
-	img.save("output-annotated.png", quality=100, subsampling=0)
+            ctx.move_to(10, 1785)
+            ctx.show_text("Here is ultra-violet. We can't see this either.")
+
+            ctx.move_to(10, 2600)
+            ctx.show_text("It falls off pretty quickly. We aren't even close")
+            ctx.move_to(10, 2600+fs)
+            ctx.show_text("to X-Rays or Gamma waves. Only extremely")
+            ctx.move_to(10, 2600+fs*2)
+            ctx.show_text("powerful cosmic events produce emissions")
+            ctx.move_to(10, 2600+fs*3)
+            ctx.show_text("at these wavelengths.")
+
+
+        surface.write_to_png(filename+'.png')
 
 
 def get_spectrum_colors():
-	# Sourced from https://www.nrel.gov/grid/solar-resource/spectra.html
-	with open("AllMODEtr.txt") as f:
-		read_tsv = list(csv.reader(f, delimiter="\t"))
-		# (CM-1)
-		# nm
-		# MCebKur MChKur
-		# MNewKur
-		# MthKur
-		# MoldKur
-		# MODWherli_WMO
-		rows = read_tsv[1:]
-		c2 = [float(row[2]) for row in rows]
-		top = max(c2)
+    # Sourced from https://www.nrel.gov/grid/solar-resource/spectra.html
+    with open("AllMODEtr.txt") as f:
+        read_tsv = list(csv.reader(f, delimiter="\t"))
+        # (CM-1)
+        # nm
+        # MCebKur MChKur
+        # MNewKur
+        # MthKur
+        # MoldKur
+        # MODWherli_WMO
+        rows = read_tsv[1:]
+        c2 = [float(row[2]) for row in rows]
+        top = max(c2)
 
-		for i, row in enumerate(rows):
-			val = float(row[2])
-			a = int((val/top)*255)
-			r, g, b = wav2RGB(float(row[1]))
-			if r == g == b == 0:
-				r = g = b = 255
+        for i, row in enumerate(rows):
+            val = float(row[2])
+            a = int((val/top)*255)
+            r, g, b = wav2RGB(float(row[1]))
+            if r == g == b == 0:
+                r = g = b = 255
 
-			yield (r, g, b, a)
+            yield (r, g, b, a)
 
 
 # https://codingmess.blogspot.com/2009/05/conversion-of-wavelength-in-nanometers.html
@@ -125,4 +148,4 @@ def wav2RGB(wavelength):
 
 
 if __name__ == '__main__':
-	main()
+    main()
