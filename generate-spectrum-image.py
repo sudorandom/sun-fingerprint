@@ -1,34 +1,36 @@
 import csv
 import cairo
+import itertools
 
-ROW_WIDTH = 800
+ROW_WIDTH = 1000
 ROW_HEIGHT = 50
 
 def main():
-    colors = list(get_spectrum_colors())
-    write_image('output/sun-spectrum', colors, include_text=False)
-    write_image('output/sun-spectrum-annotated', colors, include_text=True)
+    rows = list(get_spectrum_data_aggregated())
+    write_image('output/sun-spectrum', rows, include_text=False)
+    write_image('output/sun-spectrum-annotated', rows, include_text=True)
 
-    visible_colors = list(get_spectrum_colors(only_visible=True))
-    write_image('output/sun-spectrum-visible', visible_colors, include_text=False)
+    visible_rows = list(get_spectrum_data_aggregated(only_visible=True))
+    write_image('output/sun-spectrum-visible', visible_rows, include_text=False)
 
 
-def write_image(filename, colors, include_text=False):
-    row_count = int(len(colors) / ROW_WIDTH)
+def write_image(filename, rows, include_text=False):
+    row_count = int(len(rows) / ROW_WIDTH) + 1
+    width = min(len(rows), ROW_WIDTH)
 
-    with cairo.SVGSurface(filename+'.svg', ROW_WIDTH, row_count*ROW_HEIGHT) as surface:
+    with cairo.SVGSurface(filename+'.svg', width, row_count*ROW_HEIGHT) as surface:
         ctx = cairo.Context(surface)
         ctx.save()
         ctx.set_source_rgba(0, 0, 0, 1)
         ctx.paint()
         ctx.restore()
         ctx.stroke()
-        for i, color in enumerate(reversed(colors)):
-            row_num = int(i / ROW_WIDTH)
-            x_offset = i % ROW_WIDTH
+        for i, row in enumerate(reversed(rows)):
+            row_num = int(i / width)
+            x_offset = i % width
             y_offset = row_num * ROW_HEIGHT
-            r, g, b, a = color
-            ctx.set_source_rgba(r/255, g/255, b/255, a/255)
+
+            ctx.set_source_rgba(row['r']/255, row['g']/255, row['b']/255, row['a']/255)
             ctx.move_to(x_offset, y_offset)
             ctx.line_to(x_offset, y_offset+ROW_HEIGHT-2)
             ctx.stroke()
@@ -36,38 +38,47 @@ def write_image(filename, colors, include_text=False):
         if include_text:
             ctx.set_source_rgba(1, 1, 1, 1)
             ctx.select_font_face("Roboto", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-            ctx.set_font_size(65)
-            ctx.move_to(80, 65)
+            ctx.set_font_size(68)
+            ctx.move_to(120, 65)
             ctx.show_text("The Sun's Fingerprint")
 
             fs = 36
             ctx.set_font_size(fs)
             ctx.move_to(10, 120)
-            ctx.show_text("This is the spectrum of electromagnetic radiation")
+            ctx.show_text("This is the spectrum of electromagnetic radiation that our")
             ctx.move_to(10, 120+fs)
-            ctx.show_text("that our star, the sun, outputs. The gaps that")
+            ctx.show_text("star, the sun, outputs. The gaps that you see below are")
             ctx.move_to(10, 120+fs*2)
-            ctx.show_text("you see below are 'absorption lines'. Certain")
-            ctx.move_to(10, 120+fs*3)
-            ctx.show_text("is made of.")
+            ctx.show_text("'absorption lines'.")
 
-            ctx.move_to(10, 530)
-            ctx.show_text("Here is infra-red. Humans eyes can't detect")
-            ctx.move_to(10, 530+fs)
-            ctx.show_text("this frequency but the sun still emits in this")
-            ctx.move_to(10, 530+fs*2)
-            ctx.show_text("frequency.")
+            ctx.move_to(10, 430)
+            ctx.show_text("Here is infra-red. Humans eyes can't detect this frequency")
+            ctx.move_to(10, 430+fs)
+            ctx.show_text("but the sun still emits in this frequency.")
 
-            ctx.move_to(10, 836)
+            ctx.move_to(10, 686)
             ctx.show_text("Visible light starts here.")
 
-            ctx.move_to(10, 1785)
+            ctx.move_to(10, 1385)
             ctx.show_text("Here is ultra-violet. We can't see this either.")
 
         surface.write_to_png(filename+'.png')
 
 
-def get_spectrum_colors(only_visible=False):
+def get_spectrum_data_aggregated(only_visible=False):
+    rows = get_spectrum_data(only_visible=only_visible)
+    for nm, rows in itertools.groupby(rows, lambda row: int(row['nm']*40)):
+        rows = list(rows)
+        yield {
+          'nm': rows[0]['nm'],
+          'r': rows[0]['r'],
+          'g': rows[0]['g'],
+          'b': rows[0]['b'],
+          'a': int(sum(row['a'] for row in rows)/len(rows)),
+        }
+
+
+def get_spectrum_data(only_visible=False):
     # Sourced from https://www.nrel.gov/grid/solar-resource/spectra.html
     with open("AllMODEtr.txt") as f:
         read_tsv = list(csv.reader(f, delimiter="\t"))
@@ -85,14 +96,15 @@ def get_spectrum_colors(only_visible=False):
         for i, row in enumerate(rows):
             val = float(row[2])
             a = int((val/top)*255)
-            r, g, b = wav2RGB(float(row[1]))
+            nm = float(row[1])
+            r, g, b = wav2RGB(nm)
             if only_visible and (r == g == b == 0):
                 continue
 
             if r == g == b == 0:
                 r = g = b = 255
 
-            yield (r, g, b, a)
+            yield {'nm': nm, 'r': r, 'g': g, 'b': b, 'a': a}
 
 
 # https://codingmess.blogspot.com/2009/05/conversion-of-wavelength-in-nanometers.html
