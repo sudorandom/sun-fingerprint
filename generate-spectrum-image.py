@@ -1,17 +1,53 @@
 import csv
 import cairo
 import itertools
+import numpy as np
+import random
 
 ROW_WIDTH = 1000
 ROW_HEIGHT = 50
 
 def main():
-    rows = list(get_spectrum_data_aggregated())
+    rows = list(get_spectrum_data_aggregated(nm_step=4, min_nm=0, max_nm=3000))
+    print("Aggregated rows for full spectrum image", len(rows))
     write_image('output/sun-spectrum', rows, include_text=False)
-    write_image('output/sun-spectrum-annotated', rows, include_text=True)
+    write_fade_image('output/sun-spectrum-fade', rows, include_text=False)
+    # write_image('output/sun-spectrum-annotated', rows, include_text=True)
 
-    visible_rows = list(get_spectrum_data_aggregated(only_visible=True))
-    write_image('output/sun-spectrum-visible', visible_rows, include_text=False)
+    visible_rows = list(get_spectrum_data_aggregated(nm_step=5, min_nm=380, max_nm=700))
+    print("Aggregated rows for visible spectrum image", len(visible_rows))
+    # write_image('output/sun-spectrum-visible', visible_rows, include_text=False)
+    write_fade_image('output/sun-spectrum-visible-fade', visible_rows, include_text=False)
+
+def write_fade_image(filename, rows, include_text=False):
+    height = len(rows)
+    width = int((1/1.4)*height)
+    print("dimensions:", width, height)
+
+    with cairo.SVGSurface(filename+'.svg', width, height) as surface:
+        ctx = cairo.Context(surface)
+        ctx.save()
+        ctx.set_source_rgba(0, 0, 0, 1)
+        ctx.paint()
+        ctx.restore()
+        ctx.stroke()
+        random.seed(10)
+        # curve_height = random.randrange(-50, 50)
+        # curve_width = random.randrange(width/10, width/2)
+        for i, row in enumerate(reversed(rows)):
+            # if i % 100:
+            #     curve_height = random.randrange(-50, 50)
+            #     curve_width = random.randrange(width/10, width/2)
+            x_offset = 0
+            y_offset = i
+
+            ctx.set_source_rgba(row['r']/255.0, row['g']/255.0, row['b']/255.0, row['a']/255.0)
+            # ctx.set_source_rgba(row['a']/255.0, row['a']/255.0, row['a']/255.0, row['a']/255.0)
+            # ctx.curve_to(x_offset, y_offset, x_offset+curve_width, y_offset-curve_height, width, y_offset)
+            ctx.rectangle(x_offset, y_offset, len(rows), 1)
+            ctx.stroke()
+
+        surface.write_to_png(filename+'.png')
 
 
 def write_image(filename, rows, include_text=False):
@@ -35,50 +71,42 @@ def write_image(filename, rows, include_text=False):
             ctx.line_to(x_offset, y_offset+ROW_HEIGHT-2)
             ctx.stroke()
 
-        if include_text:
-            ctx.set_source_rgba(1, 1, 1, 1)
-            ctx.select_font_face("Roboto", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-            ctx.set_font_size(68)
-            ctx.move_to(120, 65)
-            ctx.show_text("The Sun's Fingerprint")
-
-            fs = 36
-            ctx.set_font_size(fs)
-            ctx.move_to(10, 120)
-            ctx.show_text("This is the spectrum of electromagnetic radiation that our")
-            ctx.move_to(10, 120+fs)
-            ctx.show_text("star, the sun, outputs. The gaps that you see below are")
-            ctx.move_to(10, 120+fs*2)
-            ctx.show_text("'absorption lines'.")
-
-            ctx.move_to(10, 430)
-            ctx.show_text("Here is infra-red. Humans eyes can't detect this frequency")
-            ctx.move_to(10, 430+fs)
-            ctx.show_text("but the sun still emits in this frequency.")
-
-            ctx.move_to(10, 686)
-            ctx.show_text("Visible light starts here.")
-
-            ctx.move_to(10, 1385)
-            ctx.show_text("Here is ultra-violet. We can't see this either.")
-
         surface.write_to_png(filename+'.png')
 
 
-def get_spectrum_data_aggregated(only_visible=False):
-    rows = get_spectrum_data(only_visible=only_visible)
-    for nm, rows in itertools.groupby(rows, lambda row: int(row['nm']*40)):
+def get_spectrum_data_aggregated(min_nm=None, max_nm=None, nm_step=20):
+    all_rows = list(get_spectrum_data(min_nm=min_nm, max_nm=max_nm))
+    m = {}
+    lowest = float('inf')
+    highest = float('-inf')
+    round_nm_factor = 100/nm_step
+    round_nm = lambda nm: int(nm*round_nm_factor)
+    for nm, rows in itertools.groupby(all_rows, lambda row: round_nm(row['nm'])*round_nm_factor):
         rows = list(rows)
-        yield {
-          'nm': rows[0]['nm'],
-          'r': rows[0]['r'],
-          'g': rows[0]['g'],
-          'b': rows[0]['b'],
-          'a': int(sum(row['a'] for row in rows)/len(rows)),
-        }
+        nm_rounded = round_nm(rows[0]['nm'])
+        highest = max(nm_rounded, highest)
+        lowest = min(nm_rounded, lowest)
+        m[nm_rounded] = {
+          'nm': nm_rounded*round_nm_factor,
+           'r': rows[0]['r'],
+           'g': rows[0]['g'],
+           'b': rows[0]['b'],
+           'a': int(sum(row['a'] for row in rows)/len(rows)),
+         }
+
+    print(lowest, highest, nm_step)
+    for nm in range(lowest, highest, nm_step):
+        row = m.get(nm, {
+            'nm': nm*round_nm_factor,
+            'r': 0,
+            'g': 0,
+            'b': 0,
+            'a': 0,
+        })
+        yield row
 
 
-def get_spectrum_data(only_visible=False):
+def get_spectrum_data(min_nm=None, max_nm=None):
     # Sourced from https://www.nrel.gov/grid/solar-resource/spectra.html
     with open("AllMODEtr.txt") as f:
         read_tsv = list(csv.reader(f, delimiter="\t"))
@@ -90,21 +118,34 @@ def get_spectrum_data(only_visible=False):
         # MoldKur
         # MODWherli_WMO
         rows = read_tsv[1:]
-        c2 = [float(row[2]) for row in rows]
-        top = max(c2)
+        c2 = np.array([float(row[2]) for row in rows if should_include_entry(float(row[1]), min_nm, max_nm)])
+        bottom = np.percentile(c2, 30)
+        # bottom = np.min(c2)
+        top = np.max(c2)
+
+        print(bottom, top)
 
         for i, row in enumerate(rows):
             val = float(row[2])
-            a = int((val/top)*255)
+            a = int(val/bottom/top*255)
             nm = float(row[1])
             r, g, b = wav2RGB(nm)
-            if only_visible and (r == g == b == 0):
+
+            if not should_include_entry(nm, min_nm, max_nm):
                 continue
 
             if r == g == b == 0:
                 r = g = b = 255
 
             yield {'nm': nm, 'r': r, 'g': g, 'b': b, 'a': a}
+
+
+def should_include_entry(nm, min_nm, max_nm):
+    if min_nm is not None and nm < min_nm:
+        return False
+    if max_nm is not None and nm > max_nm:
+        return False
+    return True
 
 
 # https://codingmess.blogspot.com/2009/05/conversion-of-wavelength-in-nanometers.html
