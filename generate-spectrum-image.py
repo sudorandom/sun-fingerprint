@@ -24,17 +24,22 @@ def main():
     print("Aggregated rows for full spectrum image", len(rows))
     write_image('output/sun-spectrum', rows, include_annotations=False)
     write_fade_image('output/sun-spectrum-fade', rows, include_annotations=False)
+    write_fade_image('output/sun-spectrum-square', rows, include_annotations=False, square=True)
     write_fade_image('output/sun-spectrum-fade-annotated', rows, include_annotations=True)
+    write_fade_image('output/sun-spectrum-square-annotated', rows, include_annotations=True, square=True)
 
     visible_rows = list(get_spectrum_data_aggregated(nm_step=5, min_nm=380, max_nm=700))
     print("Aggregated rows for visible spectrum image", len(visible_rows))
     write_image('output/sun-spectrum-visible', visible_rows, include_annotations=False)
     write_fade_image('output/sun-spectrum-visible-fade', visible_rows, include_annotations=False)
+    write_fade_image('output/sun-spectrum-visible-square', visible_rows, include_annotations=False, square=True)
 
 
-def write_fade_image(filename, rows, include_annotations=False):
+def write_fade_image(filename, rows, include_annotations=False, square=False):
     height = len(rows)
-    width = int((1/1.4)*height)
+    width = height
+    if not square:
+        width = int((1/1.4)*height)
     print("dimensions:", width, height)
 
     annotations = []
@@ -66,7 +71,7 @@ def write_fade_image(filename, rows, include_annotations=False):
             ctx.rectangle(width*0.8+100, annotation['start_index'], width*0.18, annotation['end_index']-annotation['start_index'])
             ctx.fill()
 
-            r, g, b = hex_to_rgb(annotation.get('text-color', '#FFFFFF'))
+            r, g, b = hex_to_rgb(annotation.get('text-color', '#000000'))
             ctx.set_source_rgba(r/255, g/255, b/255, 1)
             ctx.set_font_size(256)
             ctx.select_font_face("Courier", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
